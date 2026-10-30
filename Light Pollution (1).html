@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Light Pollution</title>
+<style>
+:root{--bg:#04060c;--panel:rgba(12,16,28,.85);--line:rgba(255,255,255,.12);--txt:#e8ecf4;--mut:#8f9ab0;--acc:#ffc766}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#globe{position:fixed;inset:0}
+.panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(8px);padding:14px 16px}
+#head{top:16px;left:16px;max-width:320px}
+#head h1{margin:0;font-size:20px;letter-spacing:.3px}
+#head p{margin:4px 0 0;color:var(--mut);font-size:12px}
+#side{top:16px;right:16px;width:320px;max-height:calc(100% - 150px);overflow:auto}
+#side h2{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--mut);font-weight:600}
+#search{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--txt);margin-bottom:8px}
+#list{max-height:130px;overflow:auto;margin:0 0 12px;padding:0;list-style:none}
+#list li{padding:5px 8px;border-radius:6px;cursor:pointer}
+#list li:hover,#list li.on{background:rgba(255,199,102,.15)}
+.stat{display:flex;gap:18px;margin:6px 0 4px}
+.stat b{display:block;font-size:22px;color:var(--acc);font-weight:600}
+.stat span{color:var(--mut);font-size:11px}
+svg text{fill:var(--mut);font-size:10px}
+#bar{left:50%;transform:translateX(-50%);bottom:16px;width:min(760px,calc(100% - 32px));display:flex;align-items:center;gap:14px}
+#bar button{background:var(--acc);color:#1a1200;border:0;border-radius:50%;width:38px;height:38px;font-size:15px;cursor:pointer;flex:none}
+#yr{font-size:28px;font-weight:600;min-width:70px;color:var(--acc)}
+#slider{flex:1;accent-color:var(--acc)}
+#banner{top:16px;left:50%;transform:translateX(-50%);background:rgba(120,60,0,.9);border-color:#ffb347;font-size:12px;max-width:min(520px,calc(100% - 700px));display:none}
+#tools{bottom:84px;left:16px;width:300px;display:none;max-height:60%;overflow:auto;font-size:12px}
+#tools h3{margin:0 0 6px;font-size:13px}
+#tools .step{margin:10px 0;padding-top:10px;border-top:1px solid var(--line)}
+#tools button,.btn{background:rgba(255,255,255,.08);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;margin-top:4px}
+#toolsBtn{bottom:16px;left:16px;padding:8px 12px;cursor:pointer;font-size:12px}
+#src{position:fixed;right:16px;bottom:16px;font-size:11px;color:var(--mut);text-align:right;max-width:260px}
+@media(max-width:900px){#side{width:auto;left:16px;top:auto;bottom:90px;max-height:34%}#head{max-width:60%}#banner{display:none!important}#src{display:none}#toolsBtn{bottom:100px}}
+</style>
+</head>
+<body>
+<div id="globe"></div>
+
+<div id="head" class="panel"><h1 id="title">Light Pollution</h1><p id="subtitle"></p></div>
+<div id="banner" class="panel"></div>
+
+<div id="side" class="panel">
+  <h2>Regions</h2>
+  <input id="search" placeholder="Search a region…">
+  <ul id="list"></ul>
+  <h2 id="chartTitle">Global trend</h2>
+  <div class="stat"><div><b id="sv">–</b><span id="sl">value</span></div><div><b id="sc">–</b><span>change vs first year</span></div></div>
+  <svg id="chart" viewBox="0 0 290 120" width="100%"></svg>
+</div>
+
+<div id="bar" class="panel">
+  <button id="play" title="Play / pause">▶</button>
+  <div id="yr">2016</div>
+  <input id="slider" type="range" min="0" max="0" step="1" value="0">
+</div>
+
+<div id="tools" class="panel">
+  <h3>Data tools (team only)</h3>
+  <div>Add new data without touching code. Works for preview; then save the files into the project folder.</div>
+  <div class="step"><b>1. GeoTIFF (.tif)</b><br>Select the yearly GeoTIFFs exported from GEE (file name must contain the year, e.g. <code>ntl_2025.tif</code>). The globe image and the stats are built automatically. PNG files also work.<br>
+    <input id="fImg" type="file" accept=".tif,.tiff,image/tiff,image/*" multiple></div>
+  <div class="step"><b>2. Stats CSV (optional)</b><br>Stats are computed from the TIFs already. Load a GEE CSV only to override them (columns: name, lat, lng, y2016 … ; a row named GLOBAL sets the global line).<br>
+    <input id="fCsv" type="file" accept=".csv,text/csv"></div>
+  <div class="step"><b>3. Save</b><br>
+    <button id="dl">Download data.json</button> <button id="dlPng">Download globe PNGs</button><br>
+    Put data.json in <code>data/</code> and the PNGs in <code>images/</code>.</div>
+  <div id="msg" style="margin-top:8px;color:var(--acc)"></div>
+</div>
+<div id="toolsBtn" class="panel">⚙ Data tools</div>
+<div id="src"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<script>
+(function(){
+  var DEFAULT = {title:"Light Pollution",subtitle:"Night-time lights 2016–2026",source:"NASA Black Marble VNP46A4 via Google Earth Engine",unit:"nW/cm²/sr",
+    years:[],locations:[]};
+  for(var y=2016;y<=2026;y++) DEFAULT.years.push({year:y,image:"images/ntl_"+y+".png",globalMean:null});
+
+  var data=DEFAULT, idx=0, selected=null, timer=null, localImg={}, texOK={};
+  var $=function(id){return document.getElementById(id)};
+
+  // ---------- Globe ----------
+  var globe=Globe()($("globe"))
+    .backgroundColor("#04060c").showAtmosphere(true).atmosphereColor("#6aa7ff").atmosphereAltitude(0.18)
+    .pointLat("lat").pointLng("lng").pointAltitude(0.015).pointRadius(0.45).pointColor(function(){return "#ffc766"})
+    .pointLabel(function(d){return "<div style='background:#0c101c;padding:4px 8px;border-radius:6px;border:1px solid #333'>"+d.name+"</div>"})
+    .onPointClick(function(d){select(d)});
+  globe.controls().autoRotate=true; globe.controls().autoRotateSpeed=0.35;
+  function resize(){globe.width(innerWidth).height(innerHeight)} addEventListener("resize",resize); resize();
+  $("globe").addEventListener("pointerdown",function(){globe.controls().autoRotate=false});
+
+  // ---------- Demo texture (clearly fake, only when no real image exists) ----------
+  var CITIES=[[40.7,-74,3],[34,-118,2.5],[19.4,-99,2],[-23.5,-46.6,2.5],[51.5,-0.1,2.5],[48.9,2.3,2],[30,31.2,2],[6.5,3.4,1.5],[-26.2,28,1.5],[28.6,77.2,3],[19,72.8,2.5],[23.8,90.4,2],[13.7,100.5,2.5],[10.8,106.7,2.5],[21,105.8,2],[31.2,121.5,3],[39.9,116.4,3],[37.5,127],[35.7,139.7,3.5],[-33.9,151.2,1.5],[55.7,37.6,2.5],[41,29,2],[35.7,51.4,2]];
+  function demoTex(year){
+    var c=document.createElement("canvas");c.width=2048;c.height=1024;var g=c.getContext("2d");
+    g.fillStyle="#000";g.fillRect(0,0,2048,1024);var k=1+0.06*(year-2016);
+    CITIES.forEach(function(p){var x=(p[1]+180)/360*2048,yy=(90-p[0])/180*1024,r=(10+p[2]*6)*Math.min(k,1.8);
+      var gr=g.createRadialGradient(x,yy,0,x,yy,r);gr.addColorStop(0,"rgba(255,220,150,.95)");gr.addColorStop(1,"rgba(255,160,40,0)");
+      g.fillStyle=gr;g.beginPath();g.arc(x,yy,r,0,6.283);g.fill()});
+    return c.toDataURL("image/png");
+  }
+  var demoCache={};
+
+  // ---------- Year handling ----------
+  function curYear(){return data.years[idx].year}
+  function showYear(){
+    var Y=data.years[idx];$("yr").textContent=Y.year;
+    var url=localImg[Y.year]||Y.image;
+    var done=function(ok){
+      if(ok){globe.globeImageUrl(url);$("banner").style.display="none"}
+      else{demoCache[Y.year]=demoCache[Y.year]||demoTex(Y.year);globe.globeImageUrl(demoCache[Y.year]);
+        $("banner").innerHTML="<b>DEMO preview – not real data.</b> No image found for "+Y.year+". Add <code>"+Y.image+"</code> or use Data tools.";$("banner").style.display="block"}
+      render();
+    };
+    var im=new Image();im.onload=function(){done(true)};im.onerror=function(){done(false)};im.src=url;
+  }
+
+  // ---------- Stats + chart ----------
+  function series(){
+    if(selected) return data.years.map(function(Y){var v=selected.values&&selected.values[Y.year];return {x:Y.year,v:(v==null||v==="")?null:+v}});
+    return data.years.map(function(Y){return {x:Y.year,v:Y.globalMean==null?null:+Y.globalMean}});
+  }
+  function render(){
+    $("chartTitle").textContent=selected?selected.name:"Global trend";
+    var s=series(),cur=s[idx].v,first=s.filter(function(p){return p.v!=null})[0];
+    $("sl").textContent=(selected?"radiance ":"global mean ")+curYear()+" ("+data.unit+")";
+    $("sv").textContent=cur==null?"–":cur.toFixed(2);
+    $("sc").textContent=(cur==null||!first||!first.v)?"–":((cur/first.v-1)*100).toFixed(0)+"%";
+    var W=290,H=120,pl=26,pb=16,pt=8,pr=8,vals=s.filter(function(p){return p.v!=null}).map(function(p){return p.v}),
+        mx=vals.length?Math.max.apply(null,vals)*1.1:1,n=s.length;
+    var X=function(i){return pl+(W-pl-pr)*(n>1?i/(n-1):0)},Yp=function(v){return pt+(H-pt-pb)*(1-v/mx)};
+    var h='<line x1="'+pl+'" y1="'+(H-pb)+'" x2="'+(W-pr)+'" y2="'+(H-pb)+'" stroke="#444"/>';
+    if(vals.length){
+      var pts=s.map(function(p,i){return p.v==null?null:X(i)+","+Yp(p.v)}).filter(Boolean).join(" ");
+      h+='<polyline points="'+pts+'" fill="none" stroke="#ffc766" stroke-width="2"/>';
+      s.forEach(function(p,i){if(p.v!=null)h+='<circle cx="'+X(i)+'" cy="'+Yp(p.v)+'" r="'+(i===idx?4:2)+'" fill="'+(i===idx?"#fff":"#ffc766")+'"/>'});
+      h+='<text x="2" y="'+(pt+8)+'">'+mx.toFixed(1)+'</text>';
+    } else h+='<text x="'+pl+'" y="60">No stats yet – load the CSV in Data tools</text>';
+    h+='<text x="'+pl+'" y="'+(H-3)+'">'+s[0].x+'</text><text x="'+(W-pr-22)+'" y="'+(H-3)+'">'+s[n-1].x+'</text>';
+    h+='<line x1="'+X(idx)+'" y1="'+pt+'" x2="'+X(idx)+'" y2="'+(H-pb)+'" stroke="#fff" stroke-opacity=".25"/>';
+    $("chart").innerHTML=h;
+  }
+
+  // ---------- Regions ----------
+  function drawList(){
+    var q=$("search").value.toLowerCase();$("list").innerHTML="";
+    data.locations.filter(function(l){return l.name.toLowerCase().indexOf(q)>=0}).forEach(function(l){
+      var li=document.createElement("li");li.textContent=l.name;if(selected===l)li.className="on";
+      li.onclick=function(){select(l)};$("list").appendChild(li)});
+  }
+  function select(l){selected=(selected===l)?null:l;globe.controls().autoRotate=false;
+    if(selected)globe.pointOfView({lat:l.lat,lng:l.lng,altitude:1.4},1000);drawList();render()}
+  $("search").oninput=drawList;
+
+  // ---------- Slider / play ----------
+  $("slider").oninput=function(){idx=+this.value;showYear()};
+  $("play").onclick=function(){
+    if(timer){clearInterval(timer);timer=null;this.textContent="▶";return}
+    this.textContent="❚❚";timer=setInterval(function(){idx=(idx+1)%data.years.length;$("slider").value=idx;showYear()},1400);
+  };
+
+  // ---------- Data tools ----------
+  $("toolsBtn").onclick=function(){var t=$("tools");t.style.display=t.style.display==="block"?"none":"block"};
+  function msg(t){$("msg").textContent=t}
+  function ensureYear(y){
+    if(!data.years.some(function(Y){return Y.year===y})){data.years.push({year:y,image:"images/ntl_"+y+".png",globalMean:null});data.years.sort(function(a,b){return a.year-b.year})}
+  }
+  function refreshSlider(){$("slider").max=data.years.length-1;if(idx>data.years.length-1)idx=data.years.length-1;$("slider").value=idx}
+  // ----- GeoTIFF -> globe texture + stats -----
+  var pngBlob={};
+  var PAL=[[0,0,0],[59,28,0],[161,74,0],[255,179,71],[255,244,214],[255,255,255]];
+  function colorOf(v){var t=Math.log(v+1)/Math.LN10/2;if(!(t>0))return PAL[0];if(t>=1)return PAL[5];
+    var s=t*5,i=Math.floor(s),f=s-i,a=PAL[i],b=PAL[i+1];return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f]}
+  function safeBox(img){try{return img.getBoundingBox()}catch(e){return [0,0,0,0]}}
+  async function processTif(f,y){
+    if(!window.GeoTIFF)throw new Error("GeoTIFF library did not load (check internet)");
+    var tiff=await GeoTIFF.fromArrayBuffer(await f.arrayBuffer());
+    var img=await tiff.getImage(),bb=safeBox(img),W=img.getWidth(),H=img.getHeight(),nd=img.getGDALNoData();
+    var bad=function(v){return v!==v||v===nd||v<0||v>100000};
+    var info="bbox ["+bb.map(function(v){return +v.toFixed(3)}).join(", ")+"], "+W+"x"+H+"px, nodata="+nd;
+    var okBox=bb[0]>=-180.5&&bb[2]<=180.5&&bb[1]>=-90.5&&bb[3]<=90.5&&(bb[2]-bb[0])>=90&&(bb[3]-bb[1])>=45;
+    if(!okBox){
+      if(Math.abs(W/H-2)<0.05){bb=[-180,-90,180,90];info+=" -> georeference looks wrong, assumed global extent"}
+      else throw new Error("Unexpected georeference: "+info);
+    }
+    // texture: place the raster on a full -180..180 / -90..90 canvas
+    var TW=2048,TH=1024,x0=Math.max(0,Math.round((bb[0]+180)/360*TW)),x1=Math.min(TW,Math.round((bb[2]+180)/360*TW)),
+        y0=Math.max(0,Math.round((90-bb[3])/180*TH)),y1=Math.min(TH,Math.round((90-bb[1])/180*TH)),
+        w=Math.max(1,x1-x0),h=Math.max(1,y1-y0);
+    var r=await img.readRasters({width:w,height:h,resampleMethod:"bilinear",samples:[0]}),a=r[0];
+    var sub=document.createElement("canvas");sub.width=w;sub.height=h;var sg=sub.getContext("2d"),id=sg.createImageData(w,h);
+    var sum=0,ws=0,lit=0,dLat=(bb[3]-bb[1])/h;
+    for(var j=0;j<h;j++){var lat=bb[3]-(j+0.5)*dLat,cw=Math.cos(lat*Math.PI/180);
+      for(var i=0;i<w;i++){var v=a[j*w+i],o=(j*w+i)*4,c=bad(v)?PAL[0]:colorOf(v);
+        id.data[o]=c[0];id.data[o+1]=c[1];id.data[o+2]=c[2];id.data[o+3]=255;if(c[0]+c[1]+c[2]>8)lit++;
+        if(!bad(v)&&lat>-60&&lat<75){sum+=v*cw;ws+=cw}}}
+    sg.putImageData(id,0,0);
+    var cv=document.createElement("canvas");cv.width=TW;cv.height=TH;var g=cv.getContext("2d");
+    g.fillStyle="#000";g.fillRect(0,0,TW,TH);g.drawImage(sub,x0,y0);
+    localImg[y]=cv.toDataURL("image/png");
+    await new Promise(function(res){cv.toBlob(function(b){pngBlob[y]=b;res()},"image/png")});
+    // stats: global mean + mean within ~10 km of each region, read from the full-resolution raster
+    var YY=data.years.filter(function(Y){return Y.year===y})[0];if(ws>0)YY.globalMean=+(sum/ws).toFixed(4);
+    var rx=(bb[2]-bb[0])/W,ry=(bb[3]-bb[1])/H,R=0.09;
+    for(var k=0;k<data.locations.length;k++){var L=data.locations[k];
+      if(L.lng<bb[0]||L.lng>bb[2]||L.lat<bb[1]||L.lat>bb[3])continue;
+      var cx=(L.lng-bb[0])/rx,cy=(bb[3]-L.lat)/ry,nx=Math.max(0.5,R/Math.max(0.2,Math.cos(L.lat*Math.PI/180))/rx),ny=Math.max(0.5,R/ry);
+      var wa=Math.max(0,Math.floor(cx-nx)),wb=Math.max(0,Math.floor(cy-ny)),wc=Math.min(W,Math.ceil(cx+nx)+1),wd=Math.min(H,Math.ceil(cy+ny)+1);
+      if(wc<=wa||wd<=wb)continue;
+      var q=(await img.readRasters({window:[wa,wb,wc,wd],samples:[0]}))[0],s=0,n=0;
+      for(var m=0;m<q.length;m++){if(!bad(q[m])){s+=q[m];n++}}
+      if(!L.values)L.values={};if(n)L.values[y]=+(s/n).toFixed(3);
+    }
+    return info+(lit<w*h*0.0005?" | WARNING: almost no lit pixels, the TIF or export looks empty":" | OK, "+lit+" lit pixels");
+  }
+  $("fImg").onchange=async function(){
+    var files=Array.prototype.slice.call(this.files),n=0,t=0,last=null,infos=[];
+    for(var i=0;i<files.length;i++){var f=files[i],m=f.name.match(/(20\d\d)/);
+      if(!m){msg("Skipped "+f.name+": no year (20xx) in the file name.");continue}
+      var y=+m[1];ensureYear(y);
+      if(/\.tiff?$/i.test(f.name)){
+        try{msg("Reading "+f.name+" …");var inf=await processTif(f,y);t++;last=y;infos.push(f.name+": "+inf)}catch(e){msg("Could not read "+f.name+": "+e.message);console.error(e);return}
+      }else{localImg[y]=URL.createObjectURL(f);n++;last=y}
+    }
+    refreshSlider();
+    if(last!=null){idx=data.years.findIndex(function(Y){return Y.year===last});$("slider").value=idx}
+    drawList();showYear();
+    msg(t+" GeoTIFF(s) processed"+(n?", "+n+" image(s) loaded":"")+". "+infos.join(" || ")+" Then download data.json and the PNGs.");
+  };
+  $("dlPng").onclick=function(){var ys=Object.keys(pngBlob);if(!ys.length){msg("Load a .tif first.");return}
+    ys.forEach(function(y,i){setTimeout(function(){var a=document.createElement("a");a.href=URL.createObjectURL(pngBlob[y]);a.download="ntl_"+y+".png";a.click()},i*400)})};
+  function parseCSV(t){
+    var lines=t.replace(/\r/g,"").split("\n").filter(function(l){return l.trim()});
+    var split=function(l){var o=[],c="",q=false;for(var i=0;i<l.length;i++){var ch=l[i];if(ch==='"')q=!q;else if(ch===","&&!q){o.push(c);c=""}else c+=ch}o.push(c);return o};
+    var head=split(lines[0]).map(function(h){return h.trim()}),low=head.map(function(h){return h.toLowerCase()});
+    var ni=low.indexOf("name"),la=low.indexOf("lat"),ln=Math.max(low.indexOf("lng"),low.indexOf("lon"));
+    var ycols=[];head.forEach(function(h,i){if(i!==ni&&i!==la&&i!==ln){var m=h.match(/^\D*(20\d\d)\D*$/);if(m)ycols.push([i,+m[1]])}});
+    var locs=[],glob={};
+    lines.slice(1).forEach(function(l){var c=split(l),name=(c[ni]||"").trim();if(!name)return;var vals={};
+      ycols.forEach(function(p){var v=parseFloat(c[p[0]]);if(!isNaN(v))vals[p[1]]=v});
+      if(name.toUpperCase()==="GLOBAL")glob=vals;else locs.push({name:name,lat:+c[la],lng:+c[ln],values:vals})});
+    return {ycols:ycols,locs:locs,glob:glob};
+  }
+  $("fCsv").onchange=function(){
+    var f=this.files[0];if(!f)return;var r=new FileReader();
+    r.onload=function(){try{
+      var p=parseCSV(r.result);p.ycols.forEach(function(c){ensureYear(c[1])});
+      Object.keys(p.glob).forEach(function(y){data.years.forEach(function(Y){if(Y.year==y)Y.globalMean=p.glob[y]})});
+      if(p.locs.length){data.locations=p.locs;selected=null;globe.pointsData(data.locations)}
+      refreshSlider();drawList();showYear();msg("CSV loaded: "+p.locs.length+" regions, "+p.ycols.length+" years.");
+    }catch(e){msg("Could not read CSV: "+e.message)}};
+    r.readAsText(f);
+  };
+  $("dl").onclick=function(){
+    var out=JSON.stringify(data,null,2),a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([out],{type:"application/json"}));a.download="data.json";a.click();
+  };
+
+  // ---------- Boot ----------
+  function boot(d){
+    data=d;data.years.sort(function(a,b){return a.year-b.year});
+    $("title").textContent=data.title||"Light Pollution";$("subtitle").textContent=data.subtitle||"";
+    $("src").textContent="Data: "+(data.source||"");
+    globe.pointsData(data.locations);
+    idx=data.years.length-1;refreshSlider();drawList();showYear();
+  }
+  fetch("data/data.json").then(function(r){if(!r.ok)throw 0;return r.json()}).then(boot).catch(function(){
+    boot(DEFAULT);setTimeout(function(){$("banner").innerHTML="<b>data/data.json not found.</b> Open this page through a web server (GitHub Pages or <code>python -m http.server</code>), not by double-clicking.";$("banner").style.display="block"},600);
+  });
+})();
+</script>
+</body>
+</html>
