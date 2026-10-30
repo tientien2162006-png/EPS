@@ -1,0 +1,64 @@
+{
+  "title": "Light Pollution",
+  "subtitle": "Night-time lights 2016–2026",
+  "source": "NASA Black Marble VNP46A4 via Google Earth Engine",
+  "unit": "nW/cm²/sr",
+  "years": [
+    {
+      "year": 2016,
+      "image": "images/ntl_2016.png",
+      "globalMean": null
+    },
+    {
+      "year": 2017,
+      "image": "images/ntl_2017.png",
+      "globalMean": null
+    },
+    {
+      "year": 2018,
+      "image": "images/ntl_2018.png",
+      "globalMean": null
+    },
+    {
+      "year": 2019,
+      "image": "images/ntl_2019.png",
+      "globalMean": null
+    },
+    {
+      "year": 2020,
+      "image": "images/ntl_2020.png",
+      "globalMean": null
+    },
+    {
+      "year": 2021,
+      "image": "images/ntl_2021.png",
+      "globalMean": null
+    },
+    {
+      "year": 2022,
+      "image": "images/ntl_2022.png",
+      "globalMean": null
+    },
+    {
+      "year": 2023,
+      "image": "images/ntl_2023.png",
+      "globalMean": null
+    },
+    {
+      "year": 2024,
+      "image": "images/ntl_2024.png",
+      "globalMean": null
+    },
+    {
+      "year": 2025,
+      "image": "images/ntl_2025.png",
+      "globalMean": null
+    },
+    {
+      "year": 2026,
+      "image": "images/ntl_2026.png",
+      "globalMean": 0.0075
+    }
+  ],
+  "locations": []
+}
